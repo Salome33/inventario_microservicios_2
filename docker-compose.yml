@@ -1,0 +1,127 @@
+services:
+  postgres:
+    image: postgres:17-alpine
+    container_name: inventory-postgres
+    environment:
+      POSTGRES_USER: inventory
+      POSTGRES_PASSWORD: inventory
+      POSTGRES_DB: postgres
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./docker/postgres/init-multiple-dbs.sh:/docker-entrypoint-initdb.d/init-multiple-dbs.sh
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U inventory -d postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  discovery-server:
+    build:
+      context: .
+      dockerfile: discovery-server/Dockerfile
+    container_name: discovery-server
+    ports:
+      - "8761:8761"
+
+  auth-service:
+    build:
+      context: .
+      dockerfile: auth-service/Dockerfile
+    container_name: auth-service
+    depends_on:
+      postgres:
+        condition: service_healthy
+      discovery-server:
+        condition: service_started
+    environment:
+      R2DBC_URL: r2dbc:postgresql://postgres:5432/auth_db
+      DB_USER: inventory
+      DB_PASSWORD: inventory
+      EUREKA_SERVER_URL: http://discovery-server:8761/eureka
+      JWT_SECRET: SW52ZW50YXJpby1TdXBlci1TZWNyZXQtS2V5LTIwMjYtQmFja2VuZC1NdWNoYXM=
+
+  catalog-service:
+    build:
+      context: .
+      dockerfile: catalog-service/Dockerfile
+    container_name: catalog-service
+    depends_on:
+      postgres:
+        condition: service_healthy
+      discovery-server:
+        condition: service_started
+    environment:
+      R2DBC_URL: r2dbc:postgresql://postgres:5432/catalog_db
+      DB_USER: inventory
+      DB_PASSWORD: inventory
+      EUREKA_SERVER_URL: http://discovery-server:8761/eureka
+      INTERNAL_GATEWAY_TOKEN: internal-gateway-token-2026
+
+  inventory-service:
+    build:
+      context: .
+      dockerfile: inventory-service/Dockerfile
+    container_name: inventory-service
+    depends_on:
+      postgres:
+        condition: service_healthy
+      discovery-server:
+        condition: service_started
+      catalog-service:
+        condition: service_started
+    environment:
+      R2DBC_URL: r2dbc:postgresql://postgres:5432/inventory_db
+      DB_USER: inventory
+      DB_PASSWORD: inventory
+      EUREKA_SERVER_URL: http://discovery-server:8761/eureka
+      INTERNAL_GATEWAY_TOKEN: internal-gateway-token-2026
+      CATALOG_SERVICE_URL: lb://catalog-service
+
+  report-service:
+    build:
+      context: .
+      dockerfile: report-service/Dockerfile
+    container_name: report-service
+    depends_on:
+      postgres:
+        condition: service_healthy
+      discovery-server:
+        condition: service_started
+      catalog-service:
+        condition: service_started
+      inventory-service:
+        condition: service_started
+    environment:
+      R2DBC_URL: r2dbc:postgresql://postgres:5432/report_db
+      DB_USER: inventory
+      DB_PASSWORD: inventory
+      EUREKA_SERVER_URL: http://discovery-server:8761/eureka
+      INTERNAL_GATEWAY_TOKEN: internal-gateway-token-2026
+      CATALOG_SERVICE_URL: lb://catalog-service
+      INVENTORY_SERVICE_URL: lb://inventory-service
+
+  api-gateway:
+    build:
+      context: .
+      dockerfile: api-gateway/Dockerfile
+    container_name: api-gateway
+    depends_on:
+      discovery-server:
+        condition: service_started
+      auth-service:
+        condition: service_started
+      catalog-service:
+        condition: service_started
+      inventory-service:
+        condition: service_started
+      report-service:
+        condition: service_started
+    environment:
+      EUREKA_SERVER_URL: http://discovery-server:8761/eureka
+      JWT_SECRET: SW52ZW50YXJpby1TdXBlci1TZWNyZXQtS2V5LTIwMjYtQmFja2VuZC1NdWNoYXM=
+      INTERNAL_GATEWAY_TOKEN: internal-gateway-token-2026
+    ports:
+      - "8080:8080"
+
+volumes:
+  postgres_data:

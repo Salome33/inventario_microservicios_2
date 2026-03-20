@@ -1,0 +1,28 @@
+server:
+  port: 8082
+
+spring:
+  application:
+    name: catalog-service
+  r2dbc:
+    url: ${R2DBC_URL:r2dbc:postgresql://localhost:5432/catalog_db}
+    username: ${DB_USER:inventory}
+    password: ${DB_PASSWORD:inventory}
+  sql:
+    init:
+      mode: always
+      schema-locations: classpath:db/schema.sql
+
+security:
+  internal-token: ${INTERNAL_GATEWAY_TOKEN:internal-gateway-token-2026}
+
+eureka:
+  client:
+    service-url:
+      defaultZone: ${EUREKA_SERVER_URL:http://localhost:8761/eureka}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info

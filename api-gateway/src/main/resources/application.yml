@@ -1,0 +1,65 @@
+server:
+  port: 8080
+
+spring:
+  application:
+    name: api-gateway
+  cloud:
+    gateway:
+      routes:
+        - id: auth-public
+          uri: lb://auth-service
+          predicates:
+            - Path=/api/auth/register,/api/auth/login,/api/auth/refresh
+        - id: auth-private
+          uri: lb://auth-service
+          predicates:
+            - Path=/api/auth/me
+          filters:
+            - JwtAuth
+        - id: users
+          uri: lb://auth-service
+          predicates:
+            - Path=/api/users/**
+          filters:
+            - JwtAuth
+        - id: categories
+          uri: lb://catalog-service
+          predicates:
+            - Path=/api/categories/**
+          filters:
+            - JwtAuth
+        - id: products
+          uri: lb://catalog-service
+          predicates:
+            - Path=/api/products/**
+          filters:
+            - JwtAuth
+        - id: inventory
+          uri: lb://inventory-service
+          predicates:
+            - Path=/api/inventory/**
+          filters:
+            - JwtAuth
+        - id: reports
+          uri: lb://report-service
+          predicates:
+            - Path=/api/reports/**
+          filters:
+            - JwtAuth
+
+security:
+  jwt:
+    secret: ${JWT_SECRET:SW52ZW50YXJpby1TdXBlci1TZWNyZXQtS2V5LTIwMjYtQmFja2VuZC1NdWNoYXM=}
+  internal-token: ${INTERNAL_GATEWAY_TOKEN:internal-gateway-token-2026}
+
+eureka:
+  client:
+    service-url:
+      defaultZone: ${EUREKA_SERVER_URL:http://localhost:8761/eureka}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
